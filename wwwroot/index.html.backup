@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Private Chat</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.7/dist/browser/signalr.min.js"></script>
+
+    <link rel="stylesheet" href="/css/chat.css">
+</head>
+
+<body>
+
+<div id="loginScreen">
+    <div class="login-box">
+        <h1>🔐 ChatBox</h1>
+
+        <input
+            type="password"
+            id="password"
+            placeholder="Enter password"
+        >
+
+        <button onclick="login()">Enter Chat</button>
+
+        <p id="loginError"></p>
+    </div>
+</div>
+
+
+<div id="chatScreen" style="display:none;">
+
+    <header>
+    	<div>
+        	<h2>💬 Private Chat</h2>
+        	<span id="otherStatus">⚫ Offline</span>
+    	</div>
+
+    	<span id="connectionStatus">Connecting...</span>
+   </header>
+
+
+    <main id="messages"></main>
+
+
+    <footer>
+
+        <input
+            type="text"
+            id="messageInput"
+            placeholder="Type a message..."
+            maxlength="2000"
+        >
+
+        <button onclick="sendMessage()">➤</button>
+
+    </footer>
+
+</div>
+
+
+<script src="/js/chat.js"></script>
+
+</body>
+</html>

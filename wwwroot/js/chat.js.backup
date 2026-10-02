@@ -1,0 +1,430 @@
+let connection;
+let currentUser = "";
+
+let userStatuses = {
+    Tom: false,
+    Myauuu: false
+};
+
+
+async function login() {
+
+    const password =
+        document.getElementById("password").value.trim();
+
+    if (!password) {
+        document.getElementById("loginError").textContent =
+            "Enter password";
+        return;
+    }
+
+    try {
+
+        const formData = new FormData();
+        formData.append("password", password);
+
+        const response = await fetch("/api/login", {
+            method: "POST",
+            body: formData
+        });
+
+        if (!response.ok) {
+            document.getElementById("loginError").textContent =
+                "Incorrect password";
+            return;
+        }
+
+        document.getElementById("loginError").textContent = "";
+
+        const meResponse = await fetch("/api/me");
+
+        if (!meResponse.ok) {
+            document.getElementById("loginError").textContent =
+                "Unable to identify user";
+            return;
+        }
+
+        const meData = await meResponse.json();
+
+        currentUser = meData.userName;
+
+        document.getElementById("loginScreen").style.display =
+            "none";
+
+        document.getElementById("chatScreen").style.display =
+            "flex";
+
+        await startChat();
+
+    } catch (error) {
+
+        console.error(error);
+
+        document.getElementById("loginError").textContent =
+            "Login failed";
+    }
+}
+
+
+async function startChat() {
+
+    connection =
+        new signalR.HubConnectionBuilder()
+            .withUrl("/chatHub")
+            .withAutomaticReconnect()
+            .build();
+
+
+    connection.on(
+        "ReceiveMessage",
+        (sender, messageText, sentAt) => {
+
+            addMessage(
+                sender,
+                messageText,
+                sentAt
+            );
+        }
+    );
+
+
+    connection.on(
+        "UserStatusChanged",
+        (userName, isOnline) => {
+
+            userStatuses[userName] =
+                isOnline;
+
+            updateUserStatus(
+                userName,
+                isOnline
+            );
+        }
+    );
+   
+  connection.on(
+    "CurrentUserStatuses",
+    (status) => {
+
+        userStatuses.Tom =
+            status.tom ??
+            status.Tom ??
+            false;
+
+        userStatuses.Myauuu =
+            status.myauuu ??
+            status.Myauuu ??
+            false;
+
+        const otherUser =
+            currentUser === "Tom"
+                ? "Myauuu"
+                : "Tom";
+
+        updateUserStatus(
+            otherUser,
+            userStatuses[otherUser]
+        );
+    }
+);
+
+    connection.onreconnecting(() => {
+
+        document.getElementById("connectionStatus")
+            .textContent = "Reconnecting...";
+
+    });
+
+
+    connection.onreconnected(() => {
+
+        document.getElementById("connectionStatus")
+            .textContent = "Connected";
+
+    });
+
+
+    connection.onclose(() => {
+
+        document.getElementById("connectionStatus")
+            .textContent = "Disconnected";
+
+    });
+
+
+    try {
+
+        await connection.start();
+
+        document.getElementById("connectionStatus")
+            .textContent = "Connected";
+
+
+        await loadUserStatuses();
+
+        await loadMessages();
+
+
+        updateUserStatus(
+            currentUser,
+            true
+        );
+
+    } catch (error) {
+
+        console.error(error);
+
+        document.getElementById("connectionStatus")
+            .textContent = "Connection failed";
+    }
+}
+
+
+async function loadUserStatuses() {
+
+    try {
+
+        const response =
+            await fetch("/api/status");
+
+        if (!response.ok)
+            return;
+
+        const status =
+            await response.json();
+
+
+        userStatuses.Tom =
+            status.tom ??
+            status.Tom ??
+            false;
+
+
+        userStatuses.Myauuu =
+            status.myauuu ??
+            status.Myauuu ??
+            false;
+
+
+        const otherUser =
+            currentUser === "Tom"
+                ? "Myauuu"
+                : "Tom";
+
+
+        updateUserStatus(
+            otherUser,
+            userStatuses[otherUser]
+        );
+
+    } catch (error) {
+
+        console.error(error);
+    }
+}
+
+
+async function loadMessages() {
+
+    try {
+
+        const response =
+            await fetch("/api/messages");
+
+        if (!response.ok) {
+
+            console.error(
+                "Unable to load messages"
+            );
+
+            return;
+        }
+
+        const messages =
+            await response.json();
+
+
+        const container =
+            document.getElementById("messages");
+
+        container.innerHTML = "";
+
+
+        messages.forEach(message => {
+
+            addMessage(
+                message.sender,
+                message.messageText,
+                message.sentAt
+            );
+
+        });
+
+
+        container.scrollTop =
+            container.scrollHeight;
+
+    } catch (error) {
+
+        console.error(error);
+    }
+}
+
+
+async function sendMessage() {
+
+    const input =
+        document.getElementById("messageInput");
+
+    const message =
+        input.value.trim();
+
+
+    if (!message)
+        return;
+
+
+    if (!connection)
+        return;
+
+
+    if (
+        connection.state !==
+        signalR.HubConnectionState.Connected
+    ) {
+        return;
+    }
+
+
+    try {
+
+        await connection.invoke(
+            "SendMessage",
+            message
+        );
+
+        input.value = "";
+
+        input.focus();
+
+    } catch (error) {
+
+        console.error(error);
+    }
+}
+
+
+function addMessage(
+    sender,
+    message,
+    sentAt
+) {
+
+    const container =
+        document.getElementById("messages");
+
+
+    const wrapper =
+        document.createElement("div");
+
+
+    wrapper.className =
+        sender === currentUser
+            ? "message me"
+            : "message other";
+
+
+    const name =
+        document.createElement("strong");
+
+    name.textContent =
+        sender;
+
+
+    const text =
+        document.createElement("div");
+
+    text.textContent =
+        message;
+
+
+    const time =
+        document.createElement("small");
+
+    time.textContent =
+        new Date(sentAt)
+            .toLocaleString();
+
+
+    wrapper.appendChild(name);
+    wrapper.appendChild(text);
+    wrapper.appendChild(time);
+
+
+    container.appendChild(wrapper);
+
+
+    container.scrollTop =
+        container.scrollHeight;
+}
+
+
+function updateUserStatus(
+    userName,
+    isOnline
+) {
+
+    const statusElement =
+        document.getElementById(
+            "otherStatus"
+        );
+
+
+    if (!statusElement)
+        return;
+
+
+    if (userName === currentUser)
+        return;
+
+
+    if (isOnline) {
+
+        statusElement.textContent =
+            "🟢 Online";
+
+        statusElement.className =
+            "online";
+
+    } else {
+
+        statusElement.textContent =
+            "⚫ Offline";
+
+        statusElement.className =
+            "offline";
+    }
+}
+
+
+const messageInput =
+    document.getElementById(
+        "messageInput"
+    );
+
+
+if (messageInput) {
+
+    messageInput.addEventListener(
+        "keydown",
+        function(event) {
+
+            if (event.key === "Enter") {
+
+                event.preventDefault();
+
+                sendMessage();
+            }
+        }
+    );
+}

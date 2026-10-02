@@ -1,0 +1,117 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.SignalR;
+using PrivateChat.Data;
+using PrivateChat.Models;
+using PrivateChat.Services;
+
+namespace PrivateChat.Hubs;
+
+[Authorize]
+public class ChatHub : Hub
+{
+    private readonly ChatDbContext _db;
+    private readonly PresenceService _presence;
+
+    public ChatHub(
+        ChatDbContext db,
+        PresenceService presence)
+    {
+        _db = db;
+        _presence = presence;
+    }
+
+    public override async Task OnConnectedAsync()
+    {
+        var userName = Context.User?.Identity?.Name;
+
+        if (!string.IsNullOrEmpty(userName))
+        {
+            // Send the current status of BOTH users
+            // to the newly connected browser.
+            await Clients.Caller.SendAsync(
+                "CurrentUserStatuses",
+                new
+                {
+                    Tom = _presence.IsOnline("Tom"),
+                    Myauuu = _presence.IsOnline("Myauuu")
+                }
+            );
+
+            // Mark this user online.
+            var becameOnline =
+                _presence.UserConnected(userName);
+
+            // Tell everyone about this user's new status.
+            if (becameOnline)
+            {
+                await Clients.All.SendAsync(
+                    "UserStatusChanged",
+                    userName,
+                    true
+                );
+            }
+        }
+
+        await base.OnConnectedAsync();
+    }
+
+    public override async Task OnDisconnectedAsync(
+        Exception? exception)
+    {
+        var userName = Context.User?.Identity?.Name;
+
+        if (!string.IsNullOrEmpty(userName))
+        {
+            var becameOffline =
+                _presence.UserDisconnected(userName);
+
+            if (becameOffline)
+            {
+                await Clients.All.SendAsync(
+                    "UserStatusChanged",
+                    userName,
+                    false
+                );
+            }
+        }
+
+        await base.OnDisconnectedAsync(exception);
+    }
+
+    public async Task SendMessage(string messageText)
+    {
+        if (string.IsNullOrWhiteSpace(messageText))
+            return;
+
+        if (messageText.Length > 2000)
+            throw new HubException(
+                "Message is too long."
+            );
+
+        var sender =
+            Context.User?.Identity?.Name;
+
+        if (string.IsNullOrEmpty(sender))
+            throw new HubException(
+                "User is not authenticated."
+            );
+
+        var message = new Message
+        {
+            Sender = sender,
+            MessageText = messageText.Trim(),
+            SentAt = DateTime.UtcNow
+        };
+
+        _db.Messages.Add(message);
+
+        await _db.SaveChangesAsync();
+
+        await Clients.All.SendAsync(
+            "ReceiveMessage",
+            message.Sender,
+            message.MessageText,
+            message.SentAt
+        );
+    }
+}
