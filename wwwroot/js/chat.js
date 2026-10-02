@@ -134,6 +134,27 @@ async function startChat() {
         }
     );
 
+/* =========================
+   IMAGE MESSAGE
+   ========================= */
+
+connection.on(
+    "ReceiveImage",
+    (
+        sender,
+        fileName,
+        originalFileName,
+        sentAt
+    ) => {
+
+        addImageMessage(
+            sender,
+            fileName,
+            originalFileName,
+            sentAt
+        );
+    }
+);
 
     /* =========================
        USER STATUS
@@ -1672,11 +1693,26 @@ async function loadMessages() {
         messages.forEach(
             message => {
 
-                addMessage(
-                    message.sender,
-                    message.messageText,
-                    message.sentAt
-                );
+                if (
+                    message.messageType ===
+                    "image"
+                ) {
+
+                    addImageMessage(
+                        message.sender,
+                        message.filePath,
+                        message.originalFileName,
+                        message.sentAt
+                    );
+
+                } else {
+
+                    addMessage(
+                        message.sender,
+                        message.messageText,
+                        message.sentAt
+                    );
+                }
             }
         );
 
@@ -1685,10 +1721,11 @@ async function loadMessages() {
 
     } catch (error) {
 
-        console.error(error);
+        console.error(
+            error
+        );
     }
 }
-
 
 /* =========================
    SEND MESSAGE
@@ -1733,6 +1770,153 @@ async function sendMessage() {
     } catch (error) {
 
         console.error(error);
+       }
+}
+
+
+/* =========================
+   IMAGE UPLOAD
+   ========================= */
+
+function selectImage() {
+
+    const input =
+        document.getElementById(
+            "imageInput"
+        );
+
+    if (input) {
+        input.click();
+    }
+}
+
+
+async function handleImageSelected(event) {
+
+    const input =
+        event.target;
+
+    if (
+        !input.files ||
+        input.files.length === 0
+    ) {
+        return;
+    }
+
+    const file =
+        input.files[0];
+
+    const allowedTypes = [
+        "image/jpeg",
+        "image/png",
+        "image/webp"
+    ];
+
+    if (
+        !allowedTypes.includes(
+            file.type
+        )
+    ) {
+
+        alert(
+            "Only JPG, PNG, and WEBP images are allowed."
+        );
+
+        input.value = "";
+
+        return;
+    }
+
+
+    const maxSize =
+        5 * 1024 * 1024;
+
+    if (file.size > maxSize) {
+
+        alert(
+            "Image must be 5 MB or smaller."
+        );
+
+        input.value = "";
+
+        return;
+    }
+
+
+    if (
+        !connection ||
+        connection.state !==
+        signalR.HubConnectionState.Connected
+    ) {
+
+        alert(
+            "Chat connection is not ready."
+        );
+
+        input.value = "";
+
+        return;
+    }
+
+
+    try {
+
+        const formData =
+            new FormData();
+
+        formData.append(
+            "file",
+            file
+        );
+
+
+        const response =
+            await fetch(
+                "/api/upload-image",
+                {
+                    method: "POST",
+                    body: formData
+                }
+            );
+
+
+        if (!response.ok) {
+
+            const errorText =
+                await response.text();
+
+            throw new Error(
+                errorText ||
+                "Image upload failed."
+            );
+        }
+
+
+        const result =
+            await response.json();
+
+
+        await connection.invoke(
+            "SendImage",
+            result.fileName,
+            result.originalFileName
+        );
+
+
+    } catch (error) {
+
+        console.error(
+            "Image upload error:",
+            error
+        );
+
+        alert(
+            "Unable to send image."
+        );
+
+    } finally {
+
+        input.value = "";
     }
 }
 
@@ -1807,6 +1991,105 @@ function addMessage(
         container.scrollHeight;
 }
 
+/* =========================
+   ADD IMAGE MESSAGE
+   ========================= */
+
+function addImageMessage(
+    sender,
+    fileName,
+    originalFileName,
+    sentAt
+) {
+
+    const container =
+        document.getElementById(
+            "messages"
+        );
+
+    const wrapper =
+        document.createElement(
+            "div"
+        );
+
+    wrapper.className =
+        sender === currentUser
+            ? "message me"
+            : "message other";
+
+
+    const name =
+        document.createElement(
+            "strong"
+        );
+
+    name.textContent =
+        sender;
+
+
+    const image =
+        document.createElement(
+            "img"
+        );
+
+    image.src =
+        "/api/images/" +
+        encodeURIComponent(
+            fileName
+        );
+
+    image.alt =
+        originalFileName ||
+        "Image";
+
+    image.loading =
+        "lazy";
+
+    image.style.maxWidth =
+        "280px";
+
+    image.style.maxHeight =
+        "350px";
+
+    image.style.objectFit =
+        "contain";
+
+    image.style.display =
+        "block";
+
+    image.style.marginTop =
+        "6px";
+
+
+    const time =
+        document.createElement(
+            "small"
+        );
+
+    time.textContent =
+        new Date(sentAt)
+            .toLocaleString();
+
+
+    wrapper.appendChild(
+        name
+    );
+
+    wrapper.appendChild(
+        image
+    );
+
+    wrapper.appendChild(
+        time
+    );
+
+    container.appendChild(
+        wrapper
+    );
+
+    container.scrollTop =
+        container.scrollHeight;
+}
 
 /* =========================
    ENTER TO SEND

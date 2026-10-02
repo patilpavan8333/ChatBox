@@ -197,6 +197,107 @@ public class ChatHub : Hub
         );
     }
 
+    /* =========================
+       SEND IMAGE
+       ========================= */
+
+    public async Task SendImage(
+        string fileName,
+        string originalFileName)
+    {
+        var sender =
+            Context.User?.Identity?.Name;
+
+        if (string.IsNullOrEmpty(sender))
+        {
+            throw new HubException(
+                "User is not authenticated."
+            );
+        }
+
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            throw new HubException(
+                "Invalid image."
+            );
+        }
+
+        var safeFileName =
+            Path.GetFileName(fileName);
+
+        var uploadDirectory =
+            Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "ChatUploads"
+            );
+
+        var filePath =
+            Path.Combine(
+                uploadDirectory,
+                safeFileName
+            );
+
+        if (!File.Exists(filePath))
+        {
+            throw new HubException(
+                "Image file was not found."
+            );
+        }
+
+        var extension =
+            Path.GetExtension(safeFileName)
+                .ToLowerInvariant();
+
+        var allowedExtensions = new[]
+        {
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".webp"
+        };
+
+        if (!allowedExtensions.Contains(extension))
+        {
+            throw new HubException(
+                "Invalid image type."
+            );
+        }
+
+        var message =
+            new Message
+            {
+                Sender = sender,
+
+                MessageText = "",
+
+                SentAt =
+                    DateTime.UtcNow,
+
+                MessageType = "image",
+
+                FilePath =
+                    fileName,
+
+                OriginalFileName =
+                    string.IsNullOrWhiteSpace(
+                        originalFileName)
+                        ? "image"
+                        : Path.GetFileName(
+                            originalFileName)
+            };
+
+        _db.Messages.Add(message);
+
+        await _db.SaveChangesAsync();
+
+        await Clients.All.SendAsync(
+            "ReceiveImage",
+            message.Sender,
+            message.FilePath,
+            message.OriginalFileName,
+            message.SentAt
+        );
+    }
 
     /* =========================
        START CALL

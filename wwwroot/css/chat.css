@@ -464,3 +464,111 @@ footer button {
     }
 
 }
+
+/* =========================
+   STABLE CHAT LAYOUT
+   ========================= */
+
+html,
+body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+}
+
+#chatScreen {
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.chat-header {
+    flex: 0 0 auto;
+    position: relative;
+    z-index: 20;
+}
+
+#messages {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+}
+
+.chat-input-area {
+    flex: 0 0 auto;
+    position: relative;
+    z-index: 20;
+}
+
+/* Keep call popups above everything */
+.call-popup,
+.active-call-screen {
+    z-index: 100;
+}
+
+/* Better mobile scrolling */
+#messages {
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent images from breaking the chat width */
+#messages img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 10px;
+}
+
+/* =========================
+   STABLE CHAT LAYOUT
+   ========================= */
+
+html,
+body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+}
+
+#chatScreen {
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.chat-header {
+    flex: 0 0 auto;
+    position: relative;
+    z-index: 20;
+}
+
+#messages {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+}
+
+.chat-input-area {
+    flex: 0 0 auto;
+    position: relative;
+    z-index: 20;
+}
+
+.call-popup,
+.active-call-screen {
+    z-index: 100;
+}
+
+#messages img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 10px;
+}

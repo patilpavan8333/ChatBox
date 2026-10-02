@@ -1,0 +1,14 @@
+# Build output
+bin/
+obj/
+publish/
+
+# Runtime uploaded images
+ChatUploads/
+publish/ChatUploads/
+
+# User secrets
+*.env
+*.key
+*.crtChatUploads/*
+!ChatUploads/.gitkeep

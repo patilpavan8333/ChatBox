@@ -9,4 +9,10 @@ public class Message
     public string MessageText { get; set; } = string.Empty;
 
     public DateTime SentAt { get; set; }
+
+    public string MessageType { get; set; } = "text";
+
+    public string? FilePath { get; set; }
+
+    public string? OriginalFileName { get; set; }
 }

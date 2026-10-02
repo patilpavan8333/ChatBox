@@ -48,7 +48,7 @@
 
     <!-- HEADER -->
 
-    <header>
+    <header class="chat-header">
 
         <div>
 
@@ -106,21 +106,41 @@
 
     <!-- MESSAGE INPUT -->
 
-    <footer>
+<footer class="chat-input-area">
 
-        <input
-            type="text"
-            id="messageInput"
-            placeholder="Type a message..."
-            maxlength="2000"
-        >
+    <button
+        type="button"
+        id="imageButton"
+        class="image-button"
+        title="Send image"
+        onclick="selectImage()"
+    >
+        🖼️
+    </button>
 
-        <button onclick="sendMessage()">
-            ➤
-        </button>
+    <input
+        type="file"
+        id="imageInput"
+        accept="image/jpeg,image/png,image/webp"
+        style="display:none"
+        onchange="handleImageSelected(event)"
+    >
 
-    </footer>
+    <input
+        type="text"
+        id="messageInput"
+        placeholder="Type a message..."
+        maxlength="2000"
+    >
 
+    <button
+        type="button"
+        onclick="sendMessage()"
+    >
+        ➤
+    </button>
+
+</footer>
 </div>
 
 
