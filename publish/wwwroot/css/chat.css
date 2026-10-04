@@ -2,19 +2,27 @@
     box-sizing: border-box;
 }
 
+html,
 body {
+    width: 100%;
+    height: 100%;
     margin: 0;
+    overflow: hidden;
     font-family: Arial, sans-serif;
+}
+
+body {
     background: #f1f5f9;
 }
 
-
-/* =========================
+/* =========================================================
    LOGIN
-   ========================= */
+   ========================================================= */
 
 #loginScreen {
+    width: 100%;
     height: 100vh;
+    height: 100dvh;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -31,7 +39,7 @@ body {
 }
 
 .login-box h1 {
-    margin-bottom: 25px;
+    margin: 0 0 25px;
 }
 
 .login-box input {
@@ -41,6 +49,11 @@ body {
     border-radius: 8px;
     font-size: 16px;
     margin-bottom: 12px;
+    outline: none;
+}
+
+.login-box input:focus {
+    border-color: #2563eb;
 }
 
 .login-box button {
@@ -64,34 +77,41 @@ body {
 }
 
 
-/* =========================
-   CHAT
-   ========================= */
+/* =========================================================
+   CHAT SCREEN
+   ========================================================= */
 
 #chatScreen {
+    width: 100%;
+    max-width: 900px;
     height: 100vh;
+    height: 100dvh;
+    margin: auto;
     display: flex;
     flex-direction: column;
-    max-width: 900px;
-    margin: auto;
+    overflow: hidden;
     background: white;
 }
 
 
-/* =========================
-   HEADER
-   ========================= */
+/* =========================================================
+   NORMAL HEADER
+   ========================================================= */
 
-header {
-    padding: 12px 18px;
+.chat-header {
+    flex: 0 0 auto;
+    min-height: 68px;
+    padding: 10px 18px;
     background: #2563eb;
     color: white;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    position: relative;
+    z-index: 20;
 }
 
-header h2 {
+.chat-header h2 {
     margin: 0;
     font-size: 21px;
 }
@@ -114,9 +134,9 @@ header h2 {
 }
 
 
-/* =========================
+/* =========================================================
    CALL BUTTONS
-   ========================= */
+   ========================================================= */
 
 .call-buttons {
     display: flex;
@@ -145,77 +165,375 @@ header h2 {
 }
 
 
-/* =========================
-   MESSAGES
-   ========================= */
+/* =========================================================
+   MESSAGE SELECTION TOOLBAR
+   ========================================================= */
 
-#messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 20px;
-    background: #f8fafc;
+.selection-toolbar {
+    position: relative;
+    z-index: 50;
+    min-height: 68px;
+    padding: 10px 14px;
+    background: #1d4ed8;
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
 }
 
+.selection-toolbar #selectionCount {
+    font-size: 18px;
+    font-weight: bold;
+    min-width: 24px;
+}
+
+.selection-icon-button,
+.selection-actions button {
+    border: none;
+    cursor: pointer;
+    background: transparent;
+    color: white;
+    font-size: 21px;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+}
+
+.selection-icon-button:hover,
+.selection-actions button:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.selection-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.selection-actions button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+
+/* =========================================================
+   REACTION PICKER
+   ========================================================= */
+
+.reaction-picker {
+    position: fixed;
+    z-index: 100;
+    padding: 7px 9px;
+    background: white;
+    border-radius: 30px;
+    box-shadow: 0 5px 25px rgba(0, 0, 0, 0.25);
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.reaction-picker button {
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: transparent;
+    border-radius: 50%;
+    font-size: 23px;
+    cursor: pointer;
+    transition: transform 0.1s ease;
+}
+
+.reaction-picker button:hover {
+    background: #f1f5f9;
+    transform: scale(1.15);
+}
+
+
+/* =========================================================
+   MESSAGES AREA
+   ========================================================= */
+
+#messages {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 18px 16px;
+    background: #f8fafc;
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+}
+
+
+/* =========================================================
+   MESSAGE ROW
+   ========================================================= */
+
+.message-row {
+    width: 100%;
+    display: flex;
+    margin-bottom: 8px;
+    position: relative;
+}
+
+.message-row.me {
+    justify-content: flex-end;
+}
+
+.message-row.other {
+    justify-content: flex-start;
+}
+
+
+/* =========================================================
+   MESSAGE BUBBLE
+   ========================================================= */
+
 .message {
+    position: relative;
     max-width: 75%;
-    padding: 10px 14px;
-    margin-bottom: 12px;
+    min-width: 70px;
+    padding: 9px 11px 7px;
     border-radius: 14px;
     word-wrap: break-word;
+    overflow-wrap: anywhere;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: pan-y;
+    cursor: pointer;
+    transition:
+        transform 0.15s ease,
+        box-shadow 0.15s ease,
+        background 0.15s ease;
 }
 
 .message.me {
-    margin-left: auto;
-    margin-right: 0;
     background: #dbeafe;
-    text-align: left;
+    border-bottom-right-radius: 4px;
 }
 
 .message.other {
-    margin-left: 0;
-    margin-right: auto;
     background: #e2e8f0;
-    text-align: left;
+    border-bottom-left-radius: 4px;
+}
+
+.message-row.selected .message {
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.45);
+    background: #bfdbfe;
 }
 
 .message strong {
     display: block;
     margin-bottom: 5px;
     font-size: 13px;
+    color: #334155;
 }
 
-.message small {
+.message-text {
+    font-size: 15px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+}
+
+.message.deleted .message-text {
+    color: #64748b;
+    font-style: italic;
+}
+
+.message img {
     display: block;
+    max-width: min(330px, 100%);
+    max-height: 420px;
+    height: auto;
+    border-radius: 10px;
+    object-fit: contain;
+}
+
+
+/* =========================================================
+   REPLY INSIDE MESSAGE
+   ========================================================= */
+
+.message-reply {
+    margin-bottom: 7px;
+    padding: 6px 8px;
+    border-left: 4px solid #2563eb;
+    background: rgba(255, 255, 255, 0.55);
+    border-radius: 7px;
+    cursor: pointer;
+    overflow: hidden;
+}
+
+.message-reply strong {
+    margin: 0 0 2px;
+    font-size: 11px;
+    color: #2563eb;
+}
+
+.message-reply-text {
+    font-size: 12px;
+    color: #475569;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+
+/* =========================================================
+   MESSAGE META
+   ========================================================= */
+
+.message-meta {
     margin-top: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 5px;
+    min-height: 14px;
+}
+
+.message-time {
     color: #64748b;
     font-size: 10px;
+    white-space: nowrap;
+}
+
+.message-edited {
+    color: #64748b;
+    font-size: 10px;
+    font-style: italic;
+}
+
+.message-status {
+    font-size: 13px;
+    line-height: 1;
+    letter-spacing: -3px;
+    padding-right: 2px;
+    color: #64748b;
+}
+
+.message-status.seen {
+    color: #2563eb;
 }
 
 
-/* =========================
-   MESSAGE INPUT
-   ========================= */
+/* =========================================================
+   REACTIONS
+   ========================================================= */
 
-footer {
+.message-reactions {
     display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 5px;
+}
+
+.reaction-chip {
+    border: 1px solid #cbd5e1;
+    background: white;
+    border-radius: 12px;
+    padding: 2px 6px;
+    font-size: 12px;
+    line-height: 18px;
+    cursor: pointer;
+}
+
+.reaction-chip.mine {
+    border-color: #2563eb;
+    background: #eff6ff;
+}
+
+
+/* =========================================================
+   REPLY / EDIT COMPOSER PREVIEW
+   ========================================================= */
+
+.composer-preview {
+    flex: 0 0 auto;
+    background: white;
+    border-top: 1px solid #e2e8f0;
+    padding: 8px 12px;
+}
+
+.composer-preview-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-left: 4px solid #2563eb;
+    padding-left: 9px;
+}
+
+#composerPreviewTitle {
+    display: block;
+    color: #2563eb;
+    font-size: 13px;
+    margin-bottom: 2px;
+}
+
+#composerPreviewText {
+    color: #64748b;
+    font-size: 12px;
+    max-width: 700px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#composerPreviewClose {
+    margin-left: auto;
+    flex: 0 0 auto;
+    border: none;
+    background: transparent;
+    color: #64748b;
+    font-size: 20px;
+    cursor: pointer;
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+}
+
+#composerPreviewClose:hover {
+    background: #f1f5f9;
+}
+
+
+/* =========================================================
+   INPUT AREA
+   ========================================================= */
+
+.chat-input-area {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
     gap: 8px;
-    padding: 12px;
+    padding: 10px 12px;
     border-top: 1px solid #ddd;
+    background: white;
+    position: relative;
+    z-index: 20;
+}
+
+.chat-input-area input[type="text"] {
+    flex: 1;
+    min-width: 0;
+    padding: 12px 16px;
+    border: 1px solid #cbd5e1;
+    border-radius: 22px;
+    outline: none;
+    font-size: 15px;
     background: white;
 }
 
-footer input {
-    flex: 1;
-    padding: 12px 16px;
-    border: 1px solid #ccc;
-    border-radius: 20px;
-    outline: none;
-    font-size: 15px;
+.chat-input-area input[type="text"]:focus {
+    border-color: #2563eb;
 }
 
-footer button {
-    width: 48px;
-    height: 48px;
+.chat-input-area button {
+    flex: 0 0 auto;
+    width: 46px;
+    height: 46px;
     border: none;
     border-radius: 50%;
     background: #2563eb;
@@ -224,10 +542,28 @@ footer button {
     cursor: pointer;
 }
 
+.chat-input-area button:hover {
+    background: #1d4ed8;
+}
 
-/* =========================
-   INCOMING CALL POPUP
-   ========================= */
+.chat-input-area button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.chat-input-area .image-button {
+    background: #e2e8f0;
+    color: #334155;
+}
+
+.chat-input-area .image-button:hover {
+    background: #cbd5e1;
+}
+
+
+/* =========================================================
+   CALL POPUP
+   ========================================================= */
 
 .call-popup {
     position: fixed;
@@ -295,9 +631,9 @@ footer button {
 }
 
 
-/* =========================
+/* =========================================================
    ACTIVE CALL
-   ========================= */
+   ========================================================= */
 
 .active-call-screen {
     position: fixed;
@@ -327,9 +663,9 @@ footer button {
 }
 
 
-/* =========================
+/* =========================================================
    VIDEO
-   ========================= */
+   ========================================================= */
 
 .video-area {
     flex: 1;
@@ -360,9 +696,9 @@ footer button {
 }
 
 
-/* =========================
+/* =========================================================
    CALL CONTROLS
-   ========================= */
+   ========================================================= */
 
 .call-controls {
     display: flex;
@@ -397,9 +733,9 @@ footer button {
 }
 
 
-/* =========================
+/* =========================================================
    STATUS
-   ========================= */
+   ========================================================= */
 
 .online {
     color: #22c55e;
@@ -410,22 +746,23 @@ footer button {
 }
 
 
-/* =========================
+/* =========================================================
    MOBILE
-   ========================= */
+   ========================================================= */
 
 @media (max-width: 600px) {
 
-    header {
-        padding: 10px 12px;
+    .chat-header {
+        min-height: 60px;
+        padding: 8px 10px;
     }
 
-    header h2 {
+    .chat-header h2 {
         font-size: 18px;
     }
 
     .header-right {
-        gap: 6px;
+        gap: 5px;
     }
 
     #connectionStatus {
@@ -439,11 +776,58 @@ footer button {
     }
 
     #messages {
-        padding: 12px;
+        padding: 12px 8px;
     }
 
     .message {
-        max-width: 85%;
+        max-width: 88%;
+        padding: 8px 10px 6px;
+    }
+
+    .message-text {
+        font-size: 15px;
+    }
+
+    .message img {
+        max-height: 350px;
+    }
+
+    .selection-toolbar {
+        min-height: 60px;
+        padding: 7px 8px;
+    }
+
+    .selection-actions button,
+    .selection-icon-button {
+        width: 38px;
+        height: 38px;
+        font-size: 19px;
+    }
+
+    .reaction-picker {
+        max-width: calc(100vw - 20px);
+        padding: 5px 6px;
+    }
+
+    .reaction-picker button {
+        width: 38px;
+        height: 38px;
+        font-size: 21px;
+    }
+
+    .chat-input-area {
+        padding: 8px;
+        gap: 6px;
+    }
+
+    .chat-input-area input[type="text"] {
+        padding: 11px 14px;
+        font-size: 15px;
+    }
+
+    .chat-input-area button {
+        width: 44px;
+        height: 44px;
     }
 
     #localVideo {
@@ -462,5 +846,31 @@ footer button {
         padding: 10px 12px;
         font-size: 12px;
     }
+}
 
+
+/* =========================================================
+   SMALL MOBILE
+   ========================================================= */
+
+@media (max-width: 380px) {
+
+    .message {
+        max-width: 92%;
+    }
+
+    .reaction-picker button {
+        width: 34px;
+        height: 34px;
+        font-size: 19px;
+    }
+
+    .chat-input-area {
+        gap: 4px;
+    }
+
+    .chat-input-area button {
+        width: 42px;
+        height: 42px;
+    }
 }

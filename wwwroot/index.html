@@ -3,182 +3,199 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <title>ChatBox</title>
 
-	 <script src="https://sdk.twilio.com/js/video/releases/2.35.0/twilio-video.min.js"></script>
-	 <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.7/dist/browser/signalr.min.js"></script>
+    <script src="https://sdk.twilio.com/js/video/releases/2.35.0/twilio-video.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.7/dist/browser/signalr.min.js"></script>
 
     <link rel="stylesheet" href="/css/chat.css">
 </head>
 
 <body>
 
-<!-- LOGIN -->
-
 <div id="loginScreen">
-
     <div class="login-box">
-
         <h1>🔐 ChatBox</h1>
 
         <input
             type="password"
             id="password"
             placeholder="Enter password"
-        >
+            autocomplete="current-password">
 
-        <button onclick="login()">
-            Enter Chat
-        </button>
+        <button onclick="login()">Enter Chat</button>
 
         <p id="loginError"></p>
-
     </div>
-
 </div>
 
 
-<!-- CHAT -->
+<div id="chatScreen" style="display:none;">
 
-<div
-    id="chatScreen"
-    style="display:none;"
->
-
-    <!-- HEADER -->
-
-    <header class="chat-header">
-
+    <!-- NORMAL HEADER -->
+    <header class="chat-header" id="normalHeader">
         <div>
-
-            <h2>💬ChatBox</h2>
-
-            <span id="otherStatus">
-                ⚫ Offline
-            </span>
-
+            <h2>💬 ChatBox</h2>
+            <span id="otherStatus">⚫ Offline</span>
         </div>
 
-
         <div class="header-right">
+            <span id="connectionStatus">Connecting...</span>
 
-            <span id="connectionStatus">
-                Connecting...
-            </span>
-
-            <!-- CALL BUTTONS -->
-
-            <div
-                class="call-buttons"
-                id="callButtons"
-            >
-
+            <div class="call-buttons" id="callButtons">
                 <button
                     id="voiceCallButton"
                     class="call-button"
                     title="Voice Call"
-                    onclick="startVoiceCall()"
-                >
-                    ☎️
-                </button>
+                    onclick="startVoiceCall()">☎️</button>
 
                 <button
                     id="videoCallButton"
                     class="call-button"
                     title="Video Call"
-                    onclick="startVideoCall()"
-                >
-                    📹
-                </button>
-
+                    onclick="startVideoCall()">📹</button>
             </div>
-
         </div>
-
     </header>
 
 
-    <!-- MESSAGES -->
+    <!-- MESSAGE SELECTION HEADER -->
+    <div id="selectionToolbar" class="selection-toolbar" style="display:none;">
 
+        <button
+            type="button"
+            id="selectionCloseButton"
+            class="selection-icon-button"
+            title="Cancel">
+            ✕
+        </button>
+
+        <span id="selectionCount">1</span>
+
+        <div class="selection-actions">
+
+            <button
+                type="button"
+                id="selectionReplyButton"
+                title="Reply">
+                ↩️
+            </button>
+
+            <button
+                type="button"
+                id="selectionEditButton"
+                title="Edit">
+                ✏️
+            </button>
+
+            <button
+                type="button"
+                id="selectionDeleteButton"
+                title="Delete">
+                🗑️
+            </button>
+
+        </div>
+    </div>
+
+
+    <!-- EMOJI REACTION PICKER -->
+    <div id="reactionPicker" class="reaction-picker" style="display:none;">
+
+        <button type="button" data-emoji="❤️">❤️</button>
+        <button type="button" data-emoji="😂">😂</button>
+        <button type="button" data-emoji="😮">😮</button>
+        <button type="button" data-emoji="😢">😢</button>
+        <button type="button" data-emoji="😡">😡</button>
+        <button type="button" data-emoji="👍">👍</button>
+
+    </div>
+
+
+    <!-- MESSAGES -->
     <main id="messages"></main>
 
 
-    <!-- MESSAGE INPUT -->
+    <!-- REPLY / EDIT PREVIEW -->
+    <div id="composerPreview" class="composer-preview" style="display:none;">
 
-<footer class="chat-input-area">
+        <div class="composer-preview-line">
+            <div>
+                <strong id="composerPreviewTitle"></strong>
+                <div id="composerPreviewText"></div>
+            </div>
 
-    <button
-        type="button"
-        id="imageButton"
-        class="image-button"
-        title="Send image"
-        onclick="selectImage()"
-    >
-        🖼️
-    </button>
+            <button
+                type="button"
+                id="composerPreviewClose"
+                title="Cancel">
+                ✕
+            </button>
+        </div>
 
-    <input
-        type="file"
-        id="imageInput"
-        accept="image/jpeg,image/png,image/webp"
-        style="display:none"
-        onchange="handleImageSelected(event)"
-    >
+    </div>
 
-    <input
-        type="text"
-        id="messageInput"
-        placeholder="Type a message..."
-        maxlength="2000"
-    >
 
-    <button
-        type="button"
-        onclick="sendMessage()"
-    >
-        ➤
-    </button>
+    <!-- INPUT -->
+    <footer class="chat-input-area">
 
-</footer>
+        <button
+            type="button"
+            id="imageButton"
+            class="image-button"
+            title="Send image"
+            onclick="selectImage()">
+            🖼️
+        </button>
+
+        <input
+            type="file"
+            id="imageInput"
+            accept="image/jpeg,image/png,image/webp"
+            style="display:none"
+            onchange="handleImageSelected(event)">
+
+        <input
+            type="text"
+            id="messageInput"
+            placeholder="Type a message..."
+            maxlength="2000"
+            autocomplete="off">
+
+        <button
+            type="button"
+            id="sendButton"
+            onclick="sendMessage()">
+            ➤
+        </button>
+
+    </footer>
+
 </div>
 
 
-<!-- INCOMING CALL POPUP -->
-
-<div
-    id="incomingCallPopup"
-    class="call-popup"
-    style="display:none;"
->
+<!-- INCOMING CALL -->
+<div id="incomingCallPopup" class="call-popup" style="display:none;">
 
     <div class="call-popup-box">
 
-        <div class="call-icon">
-            📞
-        </div>
+        <div class="call-icon">📞</div>
 
-        <h2 id="incomingCaller">
-            Incoming Call
-        </h2>
+        <h2 id="incomingCaller">Incoming Call</h2>
 
-        <p id="incomingCallType">
-            Voice call
-        </p>
+        <p id="incomingCallType">Voice call</p>
 
         <div class="incoming-call-buttons">
 
             <button
                 class="accept-call"
-                onclick="acceptIncomingCall()"
-            >
+                onclick="acceptIncomingCall()">
                 ✅ Accept
             </button>
 
             <button
                 class="reject-call"
-                onclick="rejectIncomingCall()"
-            >
+                onclick="rejectIncomingCall()">
                 ❌ Reject
             </button>
 
@@ -190,71 +207,52 @@
 
 
 <!-- ACTIVE CALL -->
-
-<div
-    id="activeCallScreen"
-    class="active-call-screen"
-    style="display:none;"
->
+<div id="activeCallScreen" class="active-call-screen" style="display:none;">
 
     <div class="active-call-header">
 
-        <span id="activeCallUser">
-            Calling...
-        </span>
+        <span id="activeCallUser">Calling...</span>
 
-        <span id="activeCallStatus">
-            Connecting...
-        </span>
+        <span id="activeCallStatus">Connecting...</span>
 
     </div>
 
 
-    <!-- VIDEO AREA -->
-
-    <div
-        id="videoArea"
-        class="video-area"
-    >
+    <div id="videoArea" class="video-area">
 
         <video
             id="remoteVideo"
             autoplay
-            playsinline
-        ></video>
+            playsinline>
+        </video>
 
         <video
             id="localVideo"
             autoplay
             muted
-            playsinline
-        ></video>
+            playsinline>
+        </video>
 
     </div>
 
-
-    <!-- CALL CONTROLS -->
 
     <div class="call-controls">
 
         <button
             id="muteButton"
-            onclick="toggleMute()"
-        >
+            onclick="toggleMute()">
             🔇 Mute
         </button>
 
         <button
             id="cameraButton"
-            onclick="toggleCamera()"
-        >
+            onclick="toggleCamera()">
             📷 Camera
         </button>
 
         <button
             class="end-call"
-            onclick="endCall()"
-        >
+            onclick="endCall()">
             🔴 End Call
         </button>
 

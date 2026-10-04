@@ -30,8 +30,20 @@ namespace PrivateChat.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DeliveredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("EditedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("FilePath")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
 
                     b.Property<string>("MessageText")
                         .IsRequired()
@@ -44,6 +56,12 @@ namespace PrivateChat.Migrations
                     b.Property<string>("OriginalFileName")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("ReplyToMessageId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("SeenAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Sender")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -53,7 +71,65 @@ namespace PrivateChat.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ReplyToMessageId");
+
                     b.ToTable("Messages");
+                });
+
+            modelBuilder.Entity("PrivateChat.Models.MessageReaction", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Emoji")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("MessageId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("User")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MessageId", "User")
+                        .IsUnique();
+
+                    b.ToTable("MessageReactions");
+                });
+
+            modelBuilder.Entity("PrivateChat.Models.Message", b =>
+                {
+                    b.HasOne("PrivateChat.Models.Message", "ReplyToMessage")
+                        .WithMany()
+                        .HasForeignKey("ReplyToMessageId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ReplyToMessage");
+                });
+
+            modelBuilder.Entity("PrivateChat.Models.MessageReaction", b =>
+                {
+                    b.HasOne("PrivateChat.Models.Message", "Message")
+                        .WithMany("Reactions")
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Message");
+                });
+
+            modelBuilder.Entity("PrivateChat.Models.Message", b =>
+                {
+                    b.Navigation("Reactions");
                 });
 #pragma warning restore 612, 618
         }

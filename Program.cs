@@ -55,11 +55,19 @@ app.MapGet("/", () =>
 
 app.MapPost("/api/login", async (HttpContext httpContext) =>
 {
-    var form =
-        await httpContext.Request.ReadFormAsync();
+    using var document =
+        await System.Text.Json.JsonDocument.ParseAsync(
+            httpContext.Request.Body);
+
+    if (!document.RootElement.TryGetProperty(
+            "password",
+            out var passwordElement))
+    {
+        return Results.BadRequest("Password is required.");
+    }
 
     var password =
-        form["password"].ToString();
+        passwordElement.GetString();
 
     var userName = password switch
     {
@@ -92,7 +100,10 @@ app.MapPost("/api/login", async (HttpContext httpContext) =>
         CookieAuthenticationDefaults.AuthenticationScheme,
         principal);
 
-    return Results.Ok();
+    return Results.Ok(new
+    {
+        userName
+    });
 })
 .AllowAnonymous();
 
@@ -113,6 +124,20 @@ app.MapGet("/api/me", (HttpContext httpContext) =>
 })
 .RequireAuthorization();
 
+// =========================
+// USER STATUS
+// =========================
+
+app.MapGet("/api/status", (
+    PrivateChat.Services.PresenceService presence) =>
+{
+    return Results.Ok(new
+    {
+        Tom = presence.IsOnline("Tom"),
+        Myauuu = presence.IsOnline("Myauuu")
+    });
+})
+.RequireAuthorization();
 
 // =========================
 // LOAD MESSAGES
@@ -122,7 +147,68 @@ app.MapGet("/api/messages", async (ChatDbContext db) =>
 {
     var messages =
         await db.Messages
+            .AsNoTracking()
+            .Include(m => m.Reactions)
+            .Include(m => m.ReplyToMessage)
             .OrderBy(m => m.SentAt)
+            .Select(m => new
+            {
+                id = m.Id,
+
+                sender = m.Sender,
+
+                messageText = m.MessageText,
+
+                sentAt = DateTime.SpecifyKind(m.SentAt, DateTimeKind.Utc),
+
+                messageType = m.MessageType,
+
+                filePath = m.FilePath,
+
+                originalFileName =
+                    m.OriginalFileName,
+
+                editedAt = m.EditedAt,
+
+                isDeleted = m.IsDeleted,
+
+                deletedAt = m.DeletedAt,
+
+                deliveredAt = m.DeliveredAt,
+
+                seenAt = m.SeenAt,
+
+                replyToMessageId =
+                    m.ReplyToMessageId,
+
+                replySender =
+                    m.ReplyToMessage != null
+                        ? m.ReplyToMessage.Sender
+                        : null,
+
+                replyText =
+                    m.ReplyToMessage == null
+                        ? null
+                        : m.ReplyToMessage.IsDeleted
+                            ? "This message was deleted"
+                            : m.ReplyToMessage.MessageType == "image"
+                                ? "📷 Photo"
+                                : (
+                                    m.ReplyToMessage.MessageText.Length > 100
+                                        ? m.ReplyToMessage.MessageText.Substring(0, 100) + "..."
+                                        : m.ReplyToMessage.MessageText
+                                  ),
+
+                reactions =
+                    m.Reactions
+                        .Select(r => new
+                        {
+                            user = r.User,
+                            emoji = r.Emoji,
+                            createdAt = r.CreatedAt
+                        })
+                        .ToList()
+            })
             .ToListAsync();
 
     return Results.Ok(messages);
