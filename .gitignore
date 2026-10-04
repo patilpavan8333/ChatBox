@@ -1,14 +1,24 @@
 # Build output
 bin/
 obj/
+
+# Published application
 publish/
 
-# Runtime uploaded images
+# Uploaded chat images
 ChatUploads/
-publish/ChatUploads/
 
-# User secrets
-*.env
-*.key
-*.crtChatUploads/*
-!ChatUploads/.gitkeep
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Logs
+*.log
+
+# User-specific files
+.vs/
+.vscode/
+
+# Local development settings
+appsettings.Development.json
