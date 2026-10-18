@@ -21,7 +21,19 @@ let userStatuses = {
 
 let twilioRoom = null;
 let localTracks = [];
+
 let twilioCallType = null;
+
+// Native WebRTC state
+let peerConnection = null;
+let localStream = null;
+let remoteStream = null;
+let webRtcCallRoom = null;
+let webRtcMakingOffer = false;
+let webRtcPendingCandidates = [];
+let webRtcMuted = false;
+let webRtcCameraOff = false;
+
 
 /* =========================================================
    CALL STATE
@@ -578,15 +590,12 @@ connection.on(
                     "Connecting..."
                 );
 
-                await connectTwilioCall(
-                    callType,
-                    roomName
-                );
+                await startWebRTCOffer();
 
             } catch (error) {
 
                 console.error(
-                    "Twilio call connection error:",
+                    "WebRTC call connection error:",
                     error
                 );
 
@@ -594,11 +603,93 @@ connection.on(
                     "Connection failed"
                 );
 
+                await cleanupWebRTCCall();
                 cleanupTwilioCall();
+                closeCallScreen();
             }
         }
     );
 
+
+
+    /* =====================================================
+       WEBRTC SIGNALING EVENTS
+       ===================================================== */
+
+    connection.on("WebRTCOffer", async (sender, roomName, offerJson) => {
+        try {
+            if (!currentCall ||
+                !currentCall.active ||
+                currentCall.otherUser !== sender ||
+                currentCall.roomName !== roomName) {
+                console.warn("Ignoring unexpected WebRTC offer.");
+                return;
+            }
+
+            await acquireWebRTCMedia(currentCall.type);
+            await createWebRTCPeerConnection();
+
+            await peerConnection.setRemoteDescription(
+                new RTCSessionDescription(JSON.parse(offerJson))
+            );
+
+            await flushWebRTCPendingCandidates();
+
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+
+            await connection.invoke(
+                "SendWebRTCAnswer",
+                sender,
+                roomName,
+                JSON.stringify(peerConnection.localDescription)
+            );
+
+            updateCallStatus("Connecting media...");
+        } catch (error) {
+            console.error("WebRTC offer handling failed:", error);
+            updateCallStatus("WebRTC setup failed");
+        }
+    });
+
+    connection.on("WebRTCAnswer", async (sender, roomName, answerJson) => {
+        try {
+            if (!currentCall ||
+                !currentCall.active ||
+                currentCall.otherUser !== sender ||
+                currentCall.roomName !== roomName ||
+                !peerConnection) {
+                console.warn("Ignoring unexpected WebRTC answer.");
+                return;
+            }
+
+            await peerConnection.setRemoteDescription(
+                new RTCSessionDescription(JSON.parse(answerJson))
+            );
+
+            await flushWebRTCPendingCandidates();
+            updateCallStatus("Connecting media...");
+        } catch (error) {
+            console.error("WebRTC answer handling failed:", error);
+            updateCallStatus("Unable to apply remote answer");
+        }
+    });
+
+    connection.on("WebRTCIceCandidate", async (sender, roomName, candidateJson) => {
+        try {
+            if (!currentCall ||
+                !currentCall.active ||
+                currentCall.otherUser !== sender ||
+                currentCall.roomName !== roomName) {
+                console.warn("Ignoring unexpected ICE candidate.");
+                return;
+            }
+
+            await addWebRTCIceCandidate(candidateJson);
+        } catch (error) {
+            console.error("WebRTC ICE candidate handling failed:", error);
+        }
+    });
 
     /* =====================================================
        CALL REJECTED
@@ -612,6 +703,7 @@ connection.on(
                 `${userName} rejected the call`
             );
 
+            void cleanupWebRTCCall();
             cleanupTwilioCall();
 
             setTimeout(
@@ -634,6 +726,7 @@ connection.on(
                 `${userName} ended the call`
             );
 
+            void cleanupWebRTCCall();
             cleanupTwilioCall();
 
             setTimeout(
@@ -1038,27 +1131,30 @@ function showIncomingCall(
    ========================================================= */
 
 async function acceptIncomingCall() {
-
-    if (!connection || !currentCall)
+    if (!connection || !currentCall) {
         return;
+    }
 
     try {
+        const caller = currentCall.otherUser;
+        const callType = currentCall.type;
+        const roomName = currentCall.roomName;
 
-        const caller =
-            currentCall.otherUser;
-
-        const callType =
-            currentCall.type;
-
-        const roomName =
-            currentCall.roomName;
-
-        if (!roomName) {
-
-            throw new Error(
-                "Twilio room name is missing."
-            );
+        if (!caller || !roomName) {
+            throw new Error("Call details are missing.");
         }
+
+        webRtcCallRoom = roomName;
+        await acquireWebRTCMedia(callType);
+        await createWebRTCPeerConnection();
+
+        currentCall.active = true;
+        currentCall.incoming = false;
+        currentCall.outgoing = false;
+
+        hideIncomingCall();
+        showActiveCall(caller, callType);
+        updateCallStatus("Waiting for caller's WebRTC offer...");
 
         await connection.invoke(
             "AcceptCall",
@@ -1066,54 +1162,16 @@ async function acceptIncomingCall() {
             callType,
             roomName
         );
-
-        currentCall.active =
-            true;
-
-        currentCall.incoming =
-            false;
-
-        currentCall.outgoing =
-            false;
-
-        hideIncomingCall();
-
-        showActiveCall(
-            caller,
-            callType
-        );
-
-        updateCallStatus(
-            "Connecting..."
-        );
-
-        await connectTwilioCall(
-            callType,
-            roomName
-        );
-
     } catch (error) {
+        console.error("Accept WebRTC call error:", error);
+        alert("Unable to accept call: " + error.message);
 
-        console.error(
-            "Accept call error:",
-            error
-        );
-
-        alert(
-            "Unable to accept call: " +
-            error.message
-        );
-
+        await cleanupWebRTCCall();
         cleanupTwilioCall();
-
         hideIncomingCall();
+        closeCallScreen();
     }
 }
-
-
-/* =========================================================
-   REJECT CALL
-   ========================================================= */
 
 async function rejectIncomingCall() {
 
@@ -1259,109 +1317,90 @@ function updateCallStatus(
    ========================================================= */
 
 function toggleMute() {
+    const button = document.getElementById("muteButton");
 
-    if (!twilioRoom)
+    // Native WebRTC microphone.
+    if (localStream) {
+        const tracks = localStream.getAudioTracks();
+        if (!tracks.length) return;
+
+        webRtcMuted = !webRtcMuted;
+        tracks.forEach(track => {
+            track.enabled = !webRtcMuted;
+        });
+
+        if (button) {
+            button.textContent = webRtcMuted ? "🔊 Unmute" : "🔇 Mute";
+        }
         return;
+    }
 
-    const button =
-        document.getElementById(
-            "muteButton"
-        );
+    // Keep the existing Twilio fallback available.
+    if (!twilioRoom || !button) return;
 
-    if (!button)
-        return;
-
-    if (
-        !button.textContent.includes(
-            "Unmute"
-        )
-    ) {
-
+    if (!button.textContent.includes("Unmute")) {
         muteTwilioAudio();
-
-        button.textContent =
-            "🔊 Unmute";
-
+        button.textContent = "🔊 Unmute";
     } else {
-
         unmuteTwilioAudio();
-
-        button.textContent =
-            "🔇 Mute";
+        button.textContent = "🔇 Mute";
     }
 }
-
 
 /* =========================================================
    CAMERA
    ========================================================= */
 
 function toggleCamera() {
+    const button = document.getElementById("cameraButton");
 
-    if (!twilioRoom)
+    // Native WebRTC camera.
+    if (localStream) {
+        const tracks = localStream.getVideoTracks();
+        if (!tracks.length) return;
+
+        webRtcCameraOff = !webRtcCameraOff;
+        tracks.forEach(track => {
+            track.enabled = !webRtcCameraOff;
+        });
+
+        if (button) {
+            button.textContent = webRtcCameraOff ? "📷 Camera Off" : "📷 Camera";
+        }
         return;
+    }
 
-    const button =
-        document.getElementById(
-            "cameraButton"
-        );
+    // Keep the existing Twilio fallback available.
+    if (!twilioRoom || !button) return;
 
-    if (!button)
-        return;
-
-    if (
-        !button.textContent.includes(
-            "Off"
-        )
-    ) {
-
+    if (!button.textContent.includes("Off")) {
         disableTwilioVideo();
-
-        button.textContent =
-            "📷 Camera Off";
-
+        button.textContent = "📷 Camera Off";
     } else {
-
         enableTwilioVideo();
-
-        button.textContent =
-            "📷 Camera";
+        button.textContent = "📷 Camera";
     }
 }
-
 
 /* =========================================================
    END CALL
    ========================================================= */
 
 async function endCall() {
-
-    if (!connection)
-        return;
+    if (!connection) return;
 
     try {
-
-        if (currentCall.otherUser) {
-
-            await connection.invoke(
-                "EndCall",
-                currentCall.otherUser
-            );
+        if (currentCall?.otherUser) {
+            await connection.invoke("EndCall", currentCall.otherUser);
         }
-
     } catch (error) {
-
-        console.error(
-            "End call error:",
-            error
-        );
+        console.error("End call error:", error);
+    } finally {
+        await cleanupWebRTCCall();
+        cleanupTwilioCall();
+        closeCallScreen();
     }
-
-    cleanupTwilioCall();
-
-    closeCallScreen();
 }
-
 
 /* =========================================================
    CLOSE CALL SCREEN
@@ -1956,6 +1995,242 @@ function cleanupTwilioCall() {
         null;
 }
 
+
+
+/* =========================================================
+   NATIVE WEBRTC HELPERS
+   ========================================================= */
+
+const webRtcConfiguration = {
+    iceServers: [
+        { urls: "stun:stun.l.google.com:19302" }
+    ]
+};
+
+function showWebRTCMedia() {
+    const localVideo = document.getElementById("localVideo");
+    const remoteVideo = document.getElementById("remoteVideo");
+
+    if (localVideo) {
+        localVideo.srcObject = localStream;
+        localVideo.muted = true;
+        localVideo.playsInline = true;
+        localVideo.style.display =
+            currentCall.type === "video" ? "block" : "none";
+    }
+
+    if (remoteVideo) {
+        remoteVideo.srcObject = remoteStream;
+        remoteVideo.playsInline = true;
+        remoteVideo.style.display =
+            currentCall.type === "video" ? "block" : "none";
+    }
+}
+
+async function acquireWebRTCMedia(callType) {
+    if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error(
+            "Microphone/camera access requires HTTPS or localhost in a supported browser."
+        );
+    }
+
+    if (localStream) {
+        return localStream;
+    }
+
+    updateCallStatus(
+        callType === "video"
+            ? "Requesting camera and microphone..."
+            : "Requesting microphone..."
+    );
+
+    localStream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: callType === "video"
+    });
+
+    remoteStream = new MediaStream();
+    showWebRTCMedia();
+
+    return localStream;
+}
+
+async function startWebRTCOffer() {
+    if (!currentCall?.otherUser || !currentCall?.roomName) {
+        throw new Error("Call details are missing.");
+    }
+
+    webRtcCallRoom = currentCall.roomName;
+
+    await acquireWebRTCMedia(currentCall.type);
+    await createWebRTCPeerConnection();
+
+    webRtcMakingOffer = true;
+
+    try {
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+
+        await connection.invoke(
+            "SendWebRTCOffer",
+            currentCall.otherUser,
+            webRtcCallRoom,
+            JSON.stringify(peerConnection.localDescription)
+        );
+
+        updateCallStatus("Calling — connecting media...");
+    } finally {
+        webRtcMakingOffer = false;
+    }
+}
+
+async function createWebRTCPeerConnection() {
+    if (peerConnection) {
+        return peerConnection;
+    }
+
+    peerConnection = new RTCPeerConnection(webRtcConfiguration);
+
+    if (!localStream) {
+        throw new Error("Local media is not ready.");
+    }
+
+    localStream.getTracks().forEach(track => {
+        peerConnection.addTrack(track, localStream);
+    });
+
+    peerConnection.ontrack = event => {
+        if (!remoteStream) {
+            remoteStream = new MediaStream();
+        }
+
+        event.streams[0]?.getTracks().forEach(track => {
+            if (!remoteStream.getTracks().some(existing => existing.id === track.id)) {
+                remoteStream.addTrack(track);
+            }
+        });
+
+        if (event.track && !remoteStream.getTracks().some(track => track.id === event.track.id)) {
+            remoteStream.addTrack(event.track);
+        }
+
+        showWebRTCMedia();
+
+        const remoteVideo = document.getElementById("remoteVideo");
+        if (remoteVideo) {
+            remoteVideo.play().catch(() => {});
+        }
+
+        updateCallStatus("Connected");
+    };
+
+    peerConnection.onicecandidate = async event => {
+        if (!event.candidate || !connection || !currentCall?.otherUser || !webRtcCallRoom) {
+            return;
+        }
+
+        try {
+            await connection.invoke(
+                "SendWebRTCIceCandidate",
+                currentCall.otherUser,
+                webRtcCallRoom,
+                JSON.stringify(event.candidate)
+            );
+        } catch (error) {
+            console.error("Sending WebRTC ICE candidate failed:", error);
+        }
+    };
+
+    peerConnection.onconnectionstatechange = () => {
+        if (!peerConnection) {
+            return;
+        }
+
+        const state = peerConnection.connectionState;
+        console.log("WebRTC connection state:", state);
+
+        if (state === "connected") {
+            updateCallStatus("Connected");
+        } else if (state === "connecting") {
+            updateCallStatus("Connecting media...");
+        } else if (state === "failed") {
+            updateCallStatus("Connection failed — TURN may be required");
+        } else if (state === "disconnected") {
+            updateCallStatus("Media connection interrupted");
+        }
+    };
+
+    return peerConnection;
+}
+
+async function flushWebRTCPendingCandidates() {
+    if (!peerConnection?.remoteDescription) {
+        return;
+    }
+
+    const candidates = webRtcPendingCandidates;
+    webRtcPendingCandidates = [];
+
+    for (const candidate of candidates) {
+        await peerConnection.addIceCandidate(candidate);
+    }
+}
+
+async function addWebRTCIceCandidate(candidateJson) {
+    const candidate = JSON.parse(candidateJson);
+
+    if (!peerConnection?.remoteDescription) {
+        webRtcPendingCandidates.push(candidate);
+        return;
+    }
+
+    await peerConnection.addIceCandidate(candidate);
+}
+
+async function cleanupWebRTCCall() {
+    if (peerConnection) {
+        peerConnection.ontrack = null;
+        peerConnection.onicecandidate = null;
+        peerConnection.onconnectionstatechange = null;
+
+        try {
+            peerConnection.close();
+        } catch (error) {
+            console.warn("WebRTC peer cleanup error:", error);
+        }
+
+        peerConnection = null;
+    }
+
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+    }
+
+    if (remoteStream) {
+        remoteStream.getTracks().forEach(track => track.stop());
+        remoteStream = null;
+    }
+
+    webRtcCallRoom = null;
+    webRtcMakingOffer = false;
+    webRtcPendingCandidates = [];
+    webRtcMuted = false;
+    webRtcCameraOff = false;
+
+    const localVideo = document.getElementById("localVideo");
+    const remoteVideo = document.getElementById("remoteVideo");
+
+    if (localVideo) {
+        localVideo.pause();
+        localVideo.srcObject = null;
+    }
+
+    if (remoteVideo) {
+        remoteVideo.pause();
+        remoteVideo.srcObject = null;
+    }
+}
 
 /* =========================================================
    LOAD MESSAGES

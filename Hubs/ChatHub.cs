@@ -662,6 +662,22 @@ public override async Task OnConnectedAsync()
             }).ToArray());
     }
 
+    private static bool IsValidCallRoom(
+        string caller,
+        string receiver,
+        string roomName)
+    {
+        var expectedRoomName =
+            "PrivateChat-" +
+            string.Join("-", new[] { caller, receiver }
+                .OrderBy(name => name, StringComparer.Ordinal));
+
+        return string.Equals(
+            roomName,
+            expectedRoomName,
+            StringComparison.Ordinal);
+    }
+
     /* =========================
        START CALL
        ========================= */
@@ -702,6 +718,11 @@ public override async Task OnConnectedAsync()
         {
             throw new HubException(
                 "Invalid room name.");
+        }
+
+        if (!IsValidCallRoom(caller, targetUser, roomName))
+        {
+            throw new HubException("Invalid call room.");
         }
 
         string? targetConnectionId;
@@ -764,6 +785,12 @@ public override async Task OnConnectedAsync()
                 "Invalid room name.");
         }
 
+        if (receiver == callerUser ||
+            !IsValidCallRoom(callerUser, receiver, roomName))
+        {
+            throw new HubException("Invalid call room.");
+        }
+
         string? callerConnectionId;
 
         lock (UserLock)
@@ -800,6 +827,13 @@ public override async Task OnConnectedAsync()
         if (string.IsNullOrEmpty(receiver))
             return;
 
+        if (!AllowedUsers.Contains(receiver) ||
+            !AllowedUsers.Contains(callerUser) ||
+            receiver == callerUser)
+        {
+            throw new HubException("Invalid call participants.");
+        }
+
         string? callerConnectionId;
 
         lock (UserLock)
@@ -831,6 +865,13 @@ public override async Task OnConnectedAsync()
         if (string.IsNullOrEmpty(caller))
             return;
 
+        if (!AllowedUsers.Contains(caller) ||
+            !AllowedUsers.Contains(otherUser) ||
+            caller == otherUser)
+        {
+            throw new HubException("Invalid call participants.");
+        }
+
         string? otherConnectionId;
 
         lock (UserLock)
@@ -849,4 +890,102 @@ public override async Task OnConnectedAsync()
                 "CallEnded",
                 caller);
     }
+
+    /* =========================
+       WEBRTC SIGNALING
+       ========================= */
+
+    public Task SendWebRTCOffer(
+        string targetUser,
+        string roomName,
+        string offerJson)
+        => SendWebRTCSignal(
+            "WebRTCOffer", targetUser, roomName, offerJson, 100_000);
+
+    public Task SendWebRTCAnswer(
+        string targetUser,
+        string roomName,
+        string answerJson)
+        => SendWebRTCSignal(
+            "WebRTCAnswer", targetUser, roomName, answerJson, 100_000);
+
+    public Task SendWebRTCIceCandidate(
+        string targetUser,
+        string roomName,
+        string candidateJson)
+        => SendWebRTCSignal(
+            "WebRTCIceCandidate", targetUser, roomName, candidateJson, 20_000);
+
+    private async Task SendWebRTCSignal(
+        string eventName,
+        string targetUser,
+        string roomName,
+        string payloadJson,
+        int maxPayloadLength)
+    {
+        var sender = Context.User?.Identity?.Name;
+
+        if (string.IsNullOrWhiteSpace(sender) ||
+            !AllowedUsers.Contains(sender))
+        {
+            throw new HubException("User is not authorized.");
+        }
+
+        if (string.IsNullOrWhiteSpace(targetUser) ||
+            !AllowedUsers.Contains(targetUser) ||
+            sender == targetUser)
+        {
+            throw new HubException("Invalid call recipient.");
+        }
+
+        var expectedRoomName =
+            "PrivateChat-" +
+            string.Join("-", new[] { sender, targetUser }
+                .OrderBy(name => name, StringComparer.Ordinal));
+
+        if (!string.Equals(roomName, expectedRoomName, StringComparison.Ordinal))
+        {
+            throw new HubException("Invalid call room.");
+        }
+
+        if (string.IsNullOrWhiteSpace(payloadJson) ||
+            payloadJson.Length > maxPayloadLength)
+        {
+            throw new HubException("Invalid WebRTC signal payload.");
+        }
+
+        try
+        {
+            using var parsed = System.Text.Json.JsonDocument.Parse(payloadJson);
+
+            if (parsed.RootElement.ValueKind !=
+                System.Text.Json.JsonValueKind.Object)
+            {
+                throw new HubException("Invalid WebRTC signal payload.");
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            throw new HubException("Malformed WebRTC signal payload.");
+        }
+
+        string? targetConnectionId;
+
+        lock (UserLock)
+        {
+            ConnectedUsers.TryGetValue(targetUser, out targetConnectionId);
+        }
+
+        if (string.IsNullOrEmpty(targetConnectionId))
+        {
+            throw new HubException("The other user is offline.");
+        }
+
+        await Clients.Client(targetConnectionId).SendAsync(
+            eventName,
+            sender,
+            roomName,
+            payloadJson);
+    }
+
 }

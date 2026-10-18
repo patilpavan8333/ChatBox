@@ -22,3 +22,6 @@ temp/
 
 # Local development settings
 appsettings.Development.json
+
+bin/
+obj/
